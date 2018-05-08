@@ -1,0 +1,200 @@
+#include <hidef.h> /* for EnableInterrupts macro */
+#include "derivative.h" /* include peripheral declarations */
+#define periodo 20 // periodo del PWM en ms
+#define Vkbi1 22
+#define VTPM2CH1 13
+#define LED1 PTBD_PTBD0
+#define LED2 PTBD_PTBD3
+#define LECTURA1 PTGD_PTGD0
+#define LECTURA2 PTGD_PTGD1
+#define AVANCE PTBD_PTBD1
+#define RETROCESO PTBD_PTBD2
+
+
+
+int util=15;	//ciclo util en porcentaje
+int estado;
+int contador;
+char fkbi;
+long dt;
+char sentgB;
+
+void conf_TPM(int ciclo_util);
+void cambia_ciclo_util(int a);
+//void configuracion_KBI(void);
+//void reiniciarKBI(void);
+void conf_SCI();
+void delay(int x);
+
+void main(void) {
+	SOPT=0x40;
+	// WatchDog desactivado 
+	// COPT = tiempo de muestreo de WatchDog largo
+	PTBDD_PTBDD0=1;
+	PTBDD_PTBDD1=1;
+	PTBDD_PTBDD2=1;
+	PTBDD_PTBDD3=1;
+	PTGDD_PTGDD0=0;
+	PTGDD_PTGDD1=0;
+	//PTGPE=(PTGPE_PTGPE0_MASK);//Pull-up activo KBI0
+	//configuracion_KBI();
+	
+	
+	fkbi=0;
+	estado=0;
+	LED1=0;
+	LED2=0;
+	contador=0;
+	dt=0;
+	sentgB=0;
+	
+	AVANCE=0;
+	RETROCESO=0;
+	
+	conf_TPM(util);
+	conf_SCI();
+	
+	EnableInterrupts;
+  
+  for(;;) {
+    // cambiar valor de util
+	  //cambia_ciclo_util(util);
+	  if(LECTURA1==1 ){
+		  LED1=1;
+	  }
+	  else{
+		  LED1=0;
+	  }
+	  if(LECTURA2==1 ){
+	  		  LED2=1;
+	  	  }
+	  	  else{
+	  		  LED2=0;
+	  	  }
+	  
+	  //reiniciarKBI();
+	  SCI2D=0x0F;		//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+//	  while(SCI2S1_TC==0){} //Espera mientras se envía el registro
+  }
+}
+
+
+void conf_SCI(void){
+	////*****************************************
+	// comunicacion a 9600 baudios
+	// SCI baud rate = BUSCLK/(16xBR)
+	// BUSCLK = 4MHz
+	// 9600= 4.000.000/(16*26)
+	// SBR=0000000011010
+	////******************************
+	SCI2BDH=0x00;
+	SCI2BDL=0b00011010;
+	////*****************
+	//
+	//7 LOOPS =0 RxD and TxD use separate pins.
+	//6 SCISWAI =0 SCI clocks continue to run in wait mode so the SCI can be the source of an interrupt that wakes up the CPU
+	//5 RSRC =0 This bit has no meaning or effect unless the LOOPS bit is set to 1
+	//4 M =0 Bit or 8-Bit Mode Select, Normal — start + 8 data bits (LSB First) + stop.
+	//3 WAKE =0 Idle-line wakeup
+	//2 ILT =0 Idle character bit count starts after start bit.
+	//1 PE =0 No hardware parity generation or checking.
+	//0 PT =0 Even parity.
+	////*****************
+
+	SCI2C1=0x00;
+
+	////*****************
+	//
+	//7 TIE =0 Transmit Interrupt Enable (for TDRE), Hardware interrupts from TDRE disabled (use polling).
+	//6 TCIE =0 Transmission Complete Interrupt Enable (for TC), Hardware interrupts from TC disabled (use polling).
+	//5 RIE =0 Receiver Interrupt Enable (for RDRF), Hardware interrupts from RDRF disabled (use polling).
+	//4 ILIE =0 Idle Line Interrupt Enable (for IDLE), Hardware interrupts from IDLE disabled (use polling)
+	//3 TE =1 Transmitter on.
+	//2 RE =1 Receiver on.
+	//1 RWU =0 Normal SCI receiver operation.
+	//0 SBK =0 Normal transmitter operation.
+	////*****************
+
+	SCI2C2=(SCI2C2_RE_MASK|SCI2C2_TE_MASK);
+
+	////*****************
+	//
+	//7 R8 =0 
+	//6 T8 =0 
+	//5 TXDIR =0 This bit has no meaning or effect unless the LOOPS bit is set to 1
+	//4 TXINV1 =0 Transmit data not inverted
+	//3 ORIE =0 Overrun interrupts disabled (use polling).
+	//2 NEIE =1 Noise Error, hardware interrupt requested when NF = 1.
+	//1 FEIE =0 Framing Error Interrupt disabled (use polling). 
+	//0 PEIE =0 Parity error, PF interrupts disabled (use polling).
+	////*****************
+
+	SCI2C3=(SCI2C3_NEIE_MASK);
+	
+}
+
+interrupt VTPM2CH1 void rutina_tpm(void){	
+	dt=TPM2CNTH+TPM2CNTL;
+	if(LECTURA1 == LECTURA2){
+		sentgB=1;
+	}else{
+		sentgB=0;
+	}
+}
+
+/*
+void reiniciarKBI(void){
+	if(fkbi==1){
+		if(LECTURA1==1){
+			fkbi=0;
+			KBISC_KBIE=1;
+		}
+	}
+}
+
+interrupt Vkbi1 void rutina_KBI(void){	
+	KBISC_KBIE=0;
+	KBISC_KBACK=1;
+	fkbi=1;
+	contador++;
+}
+
+void configuracion_KBI (void){
+	KBISC=(KBISC_KBIE_MASK|KBISC_KBIMOD_MASK); //Interrupt enable, modo = flanco y nivel
+	KBIPE=(KBIPE_KBIPE0_MASK);
+	KBISC=(KBISC|KBISC_KBACK_MASK);
+}
+*/
+
+void conf_TPM(int ciclo_util){
+	//
+	// CPWMS = PWM centrado
+	// CLKSA = Fuente de reloj BUSCLK
+	// PS1 = Divisor de 4, reloj a 1kHz
+	
+	TPM2SC=(TPM2SC_CPWMS_MASK |TPM2SC_CLKSA_MASK|TPM2SC_PS1_MASK);
+	
+	// PWM centrado, High-true pulses (clear output on compare)
+	TPM2C0SC=(TPM2C0SC_ELS0B_MASK);
+	
+	TPM2C1SC=(TPM2C1SC_ELS1B_MASK|TPM2C1SC_CH1IE_MASK);
+	
+	// Medio periodo
+	TPM2MOD=periodo*1000/2;	
+	
+	//ciclo util
+	TPM2C0V=ciclo_util*1000/2;
+}
+
+void cambia_ciclo_util(int a){
+	//ciclo util
+		TPM2C0V=a*1000/2;
+	
+}
+
+void delay(int x){
+	int n;
+	for(n=0 ; n<x ; n++) {
+		_asm NOP;
+	}
+}
