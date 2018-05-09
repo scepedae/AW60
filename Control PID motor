@@ -4,36 +4,46 @@
 //* Microcontroladores 2018-I                                       *
 //* Programador:                                                    *
 //* -Sebastian Cepeda Espinosa                                      *
-//* -Javier Mauricio Pinilla Garcia				    *
-//* -Carlos David Caballero					    *
+//* -Javier Mauricio Pinilla Garcia				                    *
+//* -Carlos David Caballero					                        *
 //* Version: 3.0                                                    *
 //* Microcontrolador: MC9S08AW60                                    *
 //* Codigo para impelentar un controlador PID en la veocidad        *
 //* de un motor DC                                                  *
-//*******************************************************************
+//*******************************************************************s
 
 #include <hidef.h> /* for EnableInterrupts macro */
 #include "derivative.h" /* include peripheral declarations */
+
 #define periodo 20 // periodo del PWM en ms
 #define Vkbi1 22
-#define VTPM2CH1 13
+#define VTPM1CH0 5
+#define VRTI 25
 #define LED1 PTBD_PTBD0
 #define LED2 PTBD_PTBD3
 #define LECTURA1 PTGD_PTGD0
 #define LECTURA2 PTGD_PTGD1
 #define AVANCE PTBD_PTBD1
 #define RETROCESO PTBD_PTBD2
+#define dl TPM2C1V
+#define TRTI 0.128 //Tiempo dt de acuerdo a RTI
+#define summax 128000.0
+#define VSCI 20
 
+#define Kp 10
+#define Ki 10
+#define Kd 10
 
-
-int util=15;	//ciclo util en porcentaje
-int estado;
-int contador;
-char fkbi;
-unsigned int dt;
+int util = 10;	//ciclo util en porcentaje
 char velL;
 char velH;
-char sentgB;
+unsigned int dt;
+double velocidad;
+double referencia;
+double error[2];
+double sum;
+double nominal;
+double delta;
 
 void conf_TPM(int ciclo_util);
 void cambia_ciclo_util(int a);
@@ -41,66 +51,58 @@ void cambia_ciclo_util(int a);
 //void reiniciarKBI(void);
 void conf_SCI(void);
 void delay(int x);
+void configuracion_RTI(void);
 
 void main(void) {
-	SOPT=0x40;
+	SOPT = 0x40;
 	// WatchDog desactivado 
 	// COPT = tiempo de muestreo de WatchDog largo
-	PTBDD_PTBDD0=1;
-	PTBDD_PTBDD1=1;
-	PTBDD_PTBDD2=1;
-	PTBDD_PTBDD3=1;
-	PTGDD_PTGDD0=0;
-	PTGDD_PTGDD1=0;
-	//PTGPE=(PTGPE_PTGPE0_MASK);//Pull-up activo KBI0
-	//configuracion_KBI();
-	
-	
-	fkbi=0;
-	estado=0;
-	LED1=0;
-	LED2=0;
-	contador=0;
-	dt=0;
-	sentgB=0;
-	velL=0;
-	velH=0;
-	
-	AVANCE=1;
-	RETROCESO=0;
-	
+	PTBDD_PTBDD0 = 1;
+	PTBDD_PTBDD1 = 1;
+	PTBDD_PTBDD2 = 1;
+	PTBDD_PTBDD3 = 1;
+	PTGDD_PTGDD0 = 0;
+
+	LED1 = 0;
+	LED2 = 0;
+	dt = 0;
+	velL = 0;
+	velH = 0;
+	velocidad = 0.0;
+	referencia = 0.0;
+	error[0] = 2;
+	error[1] = 0;
+	delta = 0.0;
+	sum = 0.0;
+	nominal = 0.0;
+
+	AVANCE = 1;
+	RETROCESO = 0;
+
 	conf_TPM(util);
 	conf_SCI();
-	
-	EnableInterrupts;
-  
-  for(;;) {
-    // cambiar valor de util
-	  //cambia_ciclo_util(util);
-	  
-	  if(LECTURA1==1 ){
-		  LED1=1;
-	  }
-	  else{
-		  LED1=0;
-	  }
-	  if(LECTURA2==1 ){
-	  		  LED2=1;
-	  	  }
-	  	  else{
-	  		  LED2=0;
-	  	  }
-	  
-	  //reiniciarKBI();
-	  SCI2D=velH;		//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
-	  while(SCI2S1_TC==0){} //Espera mientras se envía el registro
-	  SCI2D=velL;		//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
-	  while(SCI2S1_TC==0){} //Espera mientras se envía el registro
-  }
+
+	EnableInterrupts
+	;
+
+	for (;;) {
+		// cambiar valor de util
+		//cambia_ciclo_util(util);
+		//reiniciarKBI();
+	}
 }
 
+/////////////////////////////////////////////////////////////////////////////////
+//
+//	bit5=1 usa señal de reloj externo 
+//	bit4=1 interrupciones RTI activadas
+//	bits 2:0 = 110 perido de 128 ms
+/////////////////////////////////////////////////////////////////////////////////
+void configuracion_RTI(void) {
+	SRTISC = (SRTISC_RTIS2_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
+}
 
-void conf_SCI(void){
+void conf_SCI(void) {
 	////*****************************************
 	// comunicacion a 9600 baudios
 	// SCI baud rate = BUSCLK/(16xBR)
@@ -108,8 +110,8 @@ void conf_SCI(void){
 	// 9600= 4.000.000/(16*26)
 	// SBR=0000000011010
 	////******************************
-	SCI2BDH=0x00;
-	SCI2BDL=0b00011010;
+	SCI2BDH = 0x00;
+	SCI2BDL = 0b00011010;
 	////*****************
 	//
 	//7 LOOPS =0 RxD and TxD use separate pins.
@@ -122,21 +124,21 @@ void conf_SCI(void){
 	//0 PT =0 Even parity.
 	////*****************
 
-	SCI2C1=0x00;
+	SCI2C1 = 0x00;
 
-	////*****************
+	////*******
 	//
 	//7 TIE =0 Transmit Interrupt Enable (for TDRE), Hardware interrupts from TDRE disabled (use polling).
 	//6 TCIE =0 Transmission Complete Interrupt Enable (for TC), Hardware interrupts from TC disabled (use polling).
-	//5 RIE =0 Receiver Interrupt Enable (for RDRF), Hardware interrupts from RDRF disabled (use polling).
+	//5 RIE =1 Receiver Interrupt Enable (for RDRF), Hardware interrupts from RDRF enabled.
 	//4 ILIE =0 Idle Line Interrupt Enable (for IDLE), Hardware interrupts from IDLE disabled (use polling)
 	//3 TE =1 Transmitter on.
 	//2 RE =1 Receiver on.
 	//1 RWU =0 Normal SCI receiver operation.
 	//0 SBK =0 Normal transmitter operation.
-	////*****************
+	////*******
 
-	SCI2C2=(SCI2C2_RE_MASK|SCI2C2_TE_MASK);
+	SCI2C2 = (SCI2C2_RE_MASK | SCI2C2_TE_MASK | SCI2C2_RIE_MASK);
 
 	////*****************
 	//
@@ -149,75 +151,79 @@ void conf_SCI(void){
 	//1 FEIE =0 Framing Error Interrupt disabled (use polling). 
 	//0 PEIE =0 Parity error, PF interrupts disabled (use polling).
 	////*****************
+	SCI2C3 = (SCI2C3_NEIE_MASK);
 
-	SCI2C3=(SCI2C3_NEIE_MASK);
-	
 }
 
-interrupt VTPM2CH1 void rutina_tpm(void){	
-	dt=(TPM2C1VH<<8)|TPM2C1VL;
-	velL=TPM2C1VL;
-	velH=TPM2C1VH;
-	if(LECTURA1 == LECTURA2){
-		sentgB=1;
-	}else{
-		sentgB=0;
+interrupt VRTI void rutina_RTI(void) {
+	double val;
+	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
+	error[1] = error[0];
+	error[0] = referencia - velocidad;
+	delta = error[0] - error[1];
+	val = sum + (error[0] * TRTI);
+	if ((val < summax) && (val > -1 * summax)) {
+		sum += error[0] * TRTI;
 	}
+	nominal = Kp * error[0] + sum * Ki + Kd * delta;
+	util = (int) ((periodo * 0.01) * (nominal));
+	cambia_ciclo_util(util);
 }
 
-/*
-void reiniciarKBI(void){
-	if(fkbi==1){
-		if(LECTURA1==1){
-			fkbi=0;
-			KBISC_KBIE=1;
-		}
+interrupt VTPM1CH0 void rutina_tpm(void) {
+	dt = TPM2C1V;
+	velocidad = ((0.4) * 3.1416) / dt;
+
+	if (LECTURA1 != LECTURA2) {
+		velocidad = -velocidad;
 	}
+
+	SCI2D = velH;//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+	while (SCI2S1_TC == 0) {
+	} //Espera mientras se envía el registro
+	SCI2D = velL; //El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+	while (SCI2S1_TC == 0) {
+	} //Espera mientras se envía el registro
 }
 
-interrupt Vkbi1 void rutina_KBI(void){	
-	KBISC_KBIE=0;
-	KBISC_KBACK=1;
-	fkbi=1;
-	contador++;
+interrupt VSCI void sci_rx(void) {
+
+	double f = SCI2S1;
+	referencia = SCI2D;
+
 }
 
-void configuracion_KBI (void){
-	KBISC=(KBISC_KBIE_MASK|KBISC_KBIMOD_MASK); //Interrupt enable, modo = flanco y nivel
-	KBIPE=(KBIPE_KBIPE0_MASK);
-	KBISC=(KBISC|KBISC_KBACK_MASK);
-}
-*/
-
-void conf_TPM(int ciclo_util){
+void conf_TPM(int ciclo_util) {
 	//
 	// CPWMS = PWM centrado
 	// CLKSA = Fuente de reloj BUSCLK
 	// PS1 = Divisor de 4, reloj a 1kHz
-	
-	TPM2SC=(TPM2SC_CPWMS_MASK |TPM2SC_CLKSA_MASK|TPM2SC_PS1_MASK);
-	
+
+	TPM2SC = (TPM2SC_CPWMS_MASK | TPM2SC_CLKSA_MASK | TPM2SC_PS1_MASK);
+
 	// PWM centrado, High-true pulses (clear output on compare)
-	TPM2C0SC=(TPM2C0SC_ELS0B_MASK);
-	
-	TPM2C1SC=(TPM2C1SC_ELS1B_MASK|TPM2C1SC_CH1IE_MASK);
-	
+	TPM2C0SC = (TPM2C0SC_ELS0B_MASK);
+
+	TPM1SC = (TPM1SC_CLKSA_MASK | TPM1SC_PS1_MASK);
+
+	TPM1C0SC = (TPM1C0SC_ELS0B_MASK | TPM1C0SC_CH0IE_MASK);
+
 	// Medio periodo
-	TPM2MOD=periodo*1000/2;	
-	
+	TPM2MOD = periodo * 1000 / 2;
+
 	//ciclo util
-	TPM2C0V=ciclo_util*1000/2;
+	TPM2C0V = ciclo_util * 1000 / 2;
 }
 
-void cambia_ciclo_util(int a){
+void cambia_ciclo_util(int a) {
 	//ciclo util
-		TPM2C0V=a*1000/2;
-	
+	TPM2C0V = a * 1000 / 2;
+
 }
 
-void delay(int x){
+void delay(int x) {
 	int n;
-	for(n=0 ; n<x ; n++) {
+	for (n = 0; n < x; n++) {
 		_asm NOP;
 	}
 }
