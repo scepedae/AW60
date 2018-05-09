@@ -1,3 +1,17 @@
+//*******************************************************************
+//* Universidad Nacional de Colombia                                *
+//* Facultad de ingeniería mecánica y mecatrónica                   *
+//* Microcontroladores 2018-I                                       *
+//* Programador:                                                    *
+//* -Sebastian Cepeda Espinosa                                      *
+//* -Javier Mauricio Pinilla Garcia				    *
+//* -Carlos David Caballero					    *
+//* Version: 3.0                                                    *
+//* Microcontrolador: MC9S08AW60                                    *
+//* Codigo para impelentar un controlador PID en la veocidad        *
+//* de un motor DC                                                  *
+//*******************************************************************
+
 #include <hidef.h> /* for EnableInterrupts macro */
 #include "derivative.h" /* include peripheral declarations */
 #define periodo 20 // periodo del PWM en ms
