@@ -16,14 +16,16 @@ int util=15;	//ciclo util en porcentaje
 int estado;
 int contador;
 char fkbi;
-long dt;
+unsigned int dt;
+char velL;
+char velH;
 char sentgB;
 
 void conf_TPM(int ciclo_util);
 void cambia_ciclo_util(int a);
 //void configuracion_KBI(void);
 //void reiniciarKBI(void);
-void conf_SCI();
+void conf_SCI(void);
 void delay(int x);
 
 void main(void) {
@@ -47,8 +49,10 @@ void main(void) {
 	contador=0;
 	dt=0;
 	sentgB=0;
+	velL=0;
+	velH=0;
 	
-	AVANCE=0;
+	AVANCE=1;
 	RETROCESO=0;
 	
 	conf_TPM(util);
@@ -59,6 +63,7 @@ void main(void) {
   for(;;) {
     // cambiar valor de util
 	  //cambia_ciclo_util(util);
+	  
 	  if(LECTURA1==1 ){
 		  LED1=1;
 	  }
@@ -73,8 +78,10 @@ void main(void) {
 	  	  }
 	  
 	  //reiniciarKBI();
-	  SCI2D=0x0F;		//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
-//	  while(SCI2S1_TC==0){} //Espera mientras se envía el registro
+	  SCI2D=velH;		//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+	  while(SCI2S1_TC==0){} //Espera mientras se envía el registro
+	  SCI2D=velL;		//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+	  while(SCI2S1_TC==0){} //Espera mientras se envía el registro
   }
 }
 
@@ -134,7 +141,9 @@ void conf_SCI(void){
 }
 
 interrupt VTPM2CH1 void rutina_tpm(void){	
-	dt=TPM2CNTH+TPM2CNTL;
+	dt=(TPM2C1VH<<8)|TPM2C1VL;
+	velL=TPM2C1VL;
+	velH=TPM2C1VH;
 	if(LECTURA1 == LECTURA2){
 		sentgB=1;
 	}else{
