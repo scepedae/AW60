@@ -4,8 +4,8 @@
 //* Microcontroladores 2018-I                                       *
 //* Programador:                                                    *
 //* -Sebastian Cepeda Espinosa                                      *
-//* -Javier Mauricio Pinilla Garcia				                    *
-//* -Carlos David Caballero					                        *
+//* -Javier Mauricio Pinilla Garcia				    *
+//* -Carlos David Caballero					    *
 //* Version: 3.0                                                    *
 //* Microcontrolador: MC9S08AW60                                    *
 //* Codigo para impelentar un controlador PID en la veocidad        *
