@@ -35,9 +35,7 @@
 #define Kd 10
 
 int util = 10;	//ciclo util en porcentaje
-char velL;
-char velH;
-unsigned int dt;
+unsigned long dt;
 double velocidad;
 double referencia;
 double error[2];
@@ -47,11 +45,9 @@ double delta;
 
 void conf_TPM(int ciclo_util);
 void cambia_ciclo_util(int a);
-//void configuracion_KBI(void);
-//void reiniciarKBI(void);
 void conf_SCI(void);
 void delay(int x);
-void configuracion_RTI(void);
+void conf_RTI(void);
 
 void main(void) {
 	SOPT = 0x40;
@@ -66,8 +62,6 @@ void main(void) {
 	LED1 = 0;
 	LED2 = 0;
 	dt = 0;
-	velL = 0;
-	velH = 0;
 	velocidad = 0.0;
 	referencia = 0.0;
 	error[0] = 2;
@@ -81,14 +75,11 @@ void main(void) {
 
 	conf_TPM(util);
 	conf_SCI();
+	conf_RTI();
 
-	EnableInterrupts
-	;
+	EnableInterrupts;
 
 	for (;;) {
-		// cambiar valor de util
-		//cambia_ciclo_util(util);
-		//reiniciarKBI();
 	}
 }
 
@@ -98,7 +89,7 @@ void main(void) {
 //	bit4=1 interrupciones RTI activadas
 //	bits 2:0 = 110 perido de 128 ms
 /////////////////////////////////////////////////////////////////////////////////
-void configuracion_RTI(void) {
+void conf_RTI(void) {
 	SRTISC = (SRTISC_RTIS2_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
 }
 
@@ -137,55 +128,49 @@ void conf_SCI(void) {
 	//1 RWU =0 Normal SCI receiver operation.
 	//0 SBK =0 Normal transmitter operation.
 	////*******
-
 	SCI2C2 = (SCI2C2_RE_MASK | SCI2C2_TE_MASK | SCI2C2_RIE_MASK);
-
-	////*****************
-	//
-	//7 R8 =0 
-	//6 T8 =0 
-	//5 TXDIR =0 This bit has no meaning or effect unless the LOOPS bit is set to 1
-	//4 TXINV1 =0 Transmit data not inverted
-	//3 ORIE =0 Overrun interrupts disabled (use polling).
-	//2 NEIE =1 Noise Error, hardware interrupt requested when NF = 1.
-	//1 FEIE =0 Framing Error Interrupt disabled (use polling). 
-	//0 PEIE =0 Parity error, PF interrupts disabled (use polling).
-	////*****************
-	SCI2C3 = (SCI2C3_NEIE_MASK);
-
 }
 
 interrupt VRTI void rutina_RTI(void) {
-	double val;
+	double val; //valor temporal
 	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
-	error[1] = error[0];
+	error[1] = error[0];	//actualización del error
 	error[0] = referencia - velocidad;
-	delta = error[0] - error[1];
-	val = sum + (error[0] * TRTI);
-	if ((val < summax) && (val > -1 * summax)) {
-		sum += error[0] * TRTI;
+	delta = (error[0] - error[1]); //cáculo de la derivada del error
+	val = sum + (error[0] * TRTI); //Cálculo de la integral del error
+	if ((val < summax) && (val > -1 * summax)) { //limitación del acomulador para el integrador
+		sum += error[0] * TRTI; 
 	}
-	nominal = Kp * error[0] + sum * Ki + Kd * delta;
-	util = (int) ((periodo * 0.01) * (nominal));
+	nominal = Kp * error[0] + sum * Ki + Kd * delta; //señal de control nominal, 
+	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
 	cambia_ciclo_util(util);
 }
 
+//Interrupción por flanco de bajada de la señal de entrada del canal 0 de TPM1
 interrupt VTPM1CH0 void rutina_tpm(void) {
-	dt = TPM2C1V;
-	velocidad = ((0.4) * 3.1416) / dt;
+	dt = TPM1C0V; //Se lee y limpia el valor contado (tiempo en ms entre activaciones del encoder)
+	velocidad = ((0.4) * 3.1416) / dt; 
+	//0.4= 2/5
+	//2 Pi radianes = una vuelta
+	//5 activaciones del encoder por vuelta
 
-	if (LECTURA1 != LECTURA2) {
+	if (LECTURA1 != LECTURA2) { 
 		velocidad = -velocidad;
 	}
+	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales.
 
-	SCI2D = velH;//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+	SCI2D = TPM1C0VH;//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
 	while (SCI2S1_TC == 0) {
 	} //Espera mientras se envía el registro
-	SCI2D = velL; //El registro SCI2D contiene el valor que es enviado por comunicación Serial 
+	SCI2D = TPM1C0VL; //El registro SCI2D contiene el valor que es enviado por comunicación Serial 
 	while (SCI2S1_TC == 0) {
 	} //Espera mientras se envía el registro
 }
 
+
+////*******Interrupción por recepción de datos sci_RX
+//Se asigna la lectura al valor de la referencia
+////*******
 interrupt VSCI void sci_rx(void) {
 
 	double f = SCI2S1;
@@ -193,6 +178,7 @@ interrupt VSCI void sci_rx(void) {
 
 }
 
+//// Configuración del módulo Time 
 void conf_TPM(int ciclo_util) {
 	//
 	// CPWMS = PWM centrado
@@ -215,10 +201,10 @@ void conf_TPM(int ciclo_util) {
 	TPM2C0V = ciclo_util * 1000 / 2;
 }
 
-void cambia_ciclo_util(int a) {
-	//ciclo util
-	TPM2C0V = a * 1000 / 2;
 
+void cambia_ciclo_util(int a) {
+	TPM2C0V = a * 1000 / 2;
+	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 
 void delay(int x) {
