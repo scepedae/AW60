@@ -16,7 +16,6 @@
 #include "derivative.h" /* include peripheral declarations */
 
 #define periodo 20 // periodo del PWM en ms
-#define Vkbi1 22
 #define VTPM1CH0 5
 #define VRTI 25
 #define LED1 PTBD_PTBD0
@@ -34,8 +33,10 @@
 #define Ki 10
 #define Kd 10
 
+#define dt 0.008
+
 int util = 10;	//ciclo util en porcentaje
-unsigned long dt;
+int contador;
 double velocidad;
 double referencia;
 double error[2];
@@ -58,10 +59,11 @@ void main(void) {
 	PTBDD_PTBDD2 = 1;
 	PTBDD_PTBDD3 = 1;
 	PTGDD_PTGDD0 = 0;
-
+	PTGDD_PTGDD1 = 0;
+	
 	LED1 = 0;
 	LED2 = 0;
-	dt = 0;
+	contador = 0;
 	velocidad = 0.0;
 	referencia = 0.0;
 	error[0] = 2;
@@ -87,10 +89,10 @@ void main(void) {
 //
 //	bit5=1 usa señal de reloj externo 
 //	bit4=1 interrupciones RTI activadas
-//	bits 2:0 = 110 perido de 128 ms
+//	bits 2:0 = 000 perido de 8 ms
 /////////////////////////////////////////////////////////////////////////////////
 void conf_RTI(void) {
-	SRTISC = (SRTISC_RTIS2_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
+	SRTISC =(SRTISC_RTIS0_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
 }
 
 void conf_SCI(void) {
@@ -128,12 +130,19 @@ void conf_SCI(void) {
 	//1 RWU =0 Normal SCI receiver operation.
 	//0 SBK =0 Normal transmitter operation.
 	////*******
-	SCI2C2 = (SCI2C2_RE_MASK | SCI2C2_TE_MASK | SCI2C2_RIE_MASK);
+	SCI2C2 = (SCI2C2_TE_MASK);
 }
 
 interrupt VRTI void rutina_RTI(void) {
-	double val; //valor temporal
 	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
+	
+	velocidad=0.5*0.333*contador/dt;
+	
+	SCI2D =0xFF;
+	while (SCI2S1_TC == 0) {
+	} //Espera mientras se envía el registro
+	
+	/*
 	error[1] = error[0];	//actualización del error
 	error[0] = referencia - velocidad;
 	delta = (error[0] - error[1]); //cáculo de la derivada del error
@@ -143,28 +152,20 @@ interrupt VRTI void rutina_RTI(void) {
 	}
 	nominal = Kp * error[0] + sum * Ki + Kd * delta; //señal de control nominal, 
 	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
-	cambia_ciclo_util(util);
+	cambia_ciclo_util(util);*/
+	
+	contador=0;
 }
 
 //Interrupción por flanco de bajada de la señal de entrada del canal 0 de TPM1
 interrupt VTPM1CH0 void rutina_tpm(void) {
-	dt = TPM1C0V; //Se lee y limpia el valor contado (tiempo en ms entre activaciones del encoder)
-	velocidad = ((0.4) * 3.1416) / dt; 
-	//0.4= 2/5
-	//2 Pi radianes = una vuelta
-	//5 activaciones del encoder por vuelta
-
-	if (LECTURA1 != LECTURA2) { 
-		velocidad = -velocidad;
+	TPM1C0SC_CH0F=0;
+	if (LECTURA1 == LECTURA2) { 
+		contador++;
+	}else{
+		contador--;
 	}
-	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales.
-
-	SCI2D = TPM1C0VH;//El registro SCI2D contiene el valor que es enviado por comunicación Serial 
-	while (SCI2S1_TC == 0) {
-	} //Espera mientras se envía el registro
-	SCI2D = TPM1C0VL; //El registro SCI2D contiene el valor que es enviado por comunicación Serial 
-	while (SCI2S1_TC == 0) {
-	} //Espera mientras se envía el registro
+	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales
 }
 
 
@@ -172,7 +173,7 @@ interrupt VTPM1CH0 void rutina_tpm(void) {
 //Se asigna la lectura al valor de la referencia
 ////*******
 interrupt VSCI void sci_rx(void) {
-
+	
 	double f = SCI2S1;
 	referencia = SCI2D;
 
@@ -192,7 +193,7 @@ void conf_TPM(int ciclo_util) {
 
 	TPM1SC = (TPM1SC_CLKSA_MASK | TPM1SC_PS1_MASK);
 
-	TPM1C0SC = (TPM1C0SC_ELS0B_MASK | TPM1C0SC_CH0IE_MASK);
+	TPM1C0SC = (TPM1C0SC_ELS0A_MASK | TPM1C0SC_ELS0B_MASK | TPM1C0SC_CH0IE_MASK);
 
 	// Medio periodo
 	TPM2MOD = periodo * 1000 / 2;
@@ -206,6 +207,7 @@ void cambia_ciclo_util(int a) {
 	TPM2C0V = a * 1000 / 2;
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
+
 
 void delay(int x) {
 	int n;
