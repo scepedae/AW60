@@ -10,12 +10,16 @@
 #define encM2B PTGD_PTGD3
 #define VRTI 25
 #define VSCI 20
+#define VRTI 25
 
 int util = 10;	//ciclo util en porcentaje
 int contadorM1;
 int contadorM2;
-void conf_TPM(int ciclo_util);
 
+
+void conf_TPM(int ciclo_util);
+void conf_SCI(void);
+void conf_RTI(void);
 
 void main(void) {
   
@@ -87,8 +91,8 @@ void conf_SCI(void) {
 	// 9600= 4.000.000/(16*26)
 	// SBR=0000000011010
 	////******************************
-	SCI2BDH = 0x00;
-	SCI2BDL = 0b00011010;
+	SCI1BDH = 0x00;
+	SCI1BDL = 0b00011010;
 	////*****************
 	//
 	//7 LOOPS =0 RxD and TxD use separate pins.
@@ -101,7 +105,7 @@ void conf_SCI(void) {
 	//0 PT =0 Even parity.
 	////*****************
 
-	SCI2C1 = 0x00;
+	SCI1C1 = 0x00;
 
 	////*******
 	//
@@ -114,7 +118,7 @@ void conf_SCI(void) {
 	//1 RWU =0 Normal SCI receiver operation.
 	//0 SBK =0 Normal transmitter operation.
 	////*******
-	SCI2C2 = (SCI2C2_TE_MASK);
+	SCI1C2 = (SCI2C2_TE_MASK);
 }
 
 
@@ -127,6 +131,32 @@ void conf_SCI(void) {
 void conf_RTI(void) {
 	SRTISC =(SRTISC_RTIS0_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
 }
+
+interrupt VRTI void rutina_RTI(void) {
+	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
+	
+	//velocidad=0.5*0.333*contador/dt;
+	
+	SCI2D =0xFF;
+	while (SCI2S1_TC == 0) {
+	} //Espera mientras se envía el registro
+	
+	/*
+	error[1] = error[0];	//actualización del error
+	error[0] = referencia - velocidad;
+	delta = (error[0] - error[1]); //cáculo de la derivada del error
+	val = sum + (error[0] * TRTI); //Cálculo de la integral del error
+	if ((val < summax) && (val > -1 * summax)) { //limitación del acomulador para el integrador
+		sum += error[0] * TRTI; 
+	}
+	nominal = Kp * error[0] + sum * Ki + Kd * delta; //señal de control nominal, 
+	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
+	cambia_ciclo_util(util);*/
+	
+	contadorM1=0;
+	contadorM2=0;
+}
+
 
 interrupt VTPM2CH1 void rutina_tpm21(void) {
 	TPM2C1SC_CH1F=0;
@@ -152,9 +182,13 @@ interrupt VTPM2CH0 void rutina_tpm20(void) {
 ////*******Interrupción por recepción de datos sci_RX
 //Se asigna la lectura al valor de la referencia
 ////*******
+
+
+/*
 interrupt VSCI void sci_rx(void) {
 	
 	double f = SCI2S1;
 	referencia = SCI2D;
 
 }
+*/
