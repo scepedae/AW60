@@ -1,99 +1,9 @@
-
-#include <hidef.h> /* for EnableInterrupts macro */
-#include "derivative.h" /* include peripheral declarations */
-
-#define periodo 20 // periodo del PWM en ms
-#define VTPM2CH0 12
-#define VTPM2CH1 13
-#define encM1A PTGD_PTGD0
-#define encM1B PTGD_PTGD1
-#define encM2A PTGD_PTGD2
-#define encM2B PTGD_PTGD3
-
-
-int util = 10;	//ciclo util en porcentaje
-int contadorM1;
-int contadorM2;
-void conf_TPM(int ciclo_util);
-
-
-void main(void) {
-  
-  /* include your code here */
-  SOPT = 0x40;
-  conf_TPM(util);
-  
-  contadorM1=0;
-  contadorM2=0;
-
-  for(;;) {
-    __RESET_WATCHDOG();	/* feeds the dog */
-  } /* loop forever */
-  /* please make sure that you never leave main */
-}
-
-void conf_TPM(int ciclo_util) {
-	//
-	// CPWMS = PWM centrado
-	// CLKSA = Fuente de reloj BUSCLK
-	// PS1 = Divisor de 4, reloj a 1kHz
-
-	TPM1SC = (TPM1SC_CPWMS_MASK | TPM1SC_CLKSA_MASK | TPM1SC_PS1_MASK);
-	
-	// Medio periodo
-		TPM1MOD = periodo * 1000 / 2;
-
-	// PWM centrado, High-true pulses (clear output on compare)
-	TPM1C0SC = (TPM1C0SC_ELS0B_MASK);
-	TPM1C1SC = (TPM1C1SC_ELS1B_MASK);
-	TPM1C2SC = (TPM1C2SC_ELS2B_MASK);
-	TPM1C3SC = (TPM1C3SC_ELS3B_MASK);
-	//ciclo util
-	TPM1C0V = 0;
-	TPM1C1V = 0;
-	TPM1C2V = 0;
-	TPM1C3V = 0;
-	
-	//Conf lectura encoders:
-	TPM2SC = (TPM2SC_CLKSA_MASK | TPM2SC_PS1_MASK);
-	
-	TPM2C0SC = (TPM2C0SC_ELS0A_MASK | TPM2C0SC_ELS0B_MASK | TPM2C0SC_CH0IE_MASK);
-	TPM2C1SC = (TPM2C1SC_ELS1A_MASK | TPM2C1SC_ELS1B_MASK | TPM2C1SC_CH1IE_MASK);
-}
-
-void pwm_1_0(int a) {
-	TPM1C0V = a * 1000 / 2;
-	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
-}
-void pwm_1_1(int a) {
-	TPM1C1V = a * 1000 / 2;
-	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
-}
-void pwm_1_2(int a) {
-	TPM1C2V = a * 1000 / 2;
-	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
-}
-void pwm_1_3(int a) {
-	TPM1C3V = a * 1000 / 2;
-	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
-}
-
 interrupt VTPM2CH0 void rutina_tpm20(void) {
 	TPM2C0SC_CH0F=0;
 	if (encM1A == encM1B) { 
 		contadorM1++;
 	}else{
 		contadorM1--;
-	}
-	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales
-}
-
-interrupt VTPM2CH1 void rutina_tpm21(void) {
-	TPM2C1SC_CH1F=0;
-	if (encM2A == encM2A) { 
-		contadorM2++;
-	}else{
-		contadorM2--;
 	}
 	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales
 }
