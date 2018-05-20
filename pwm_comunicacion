@@ -10,28 +10,36 @@
 #define encM2B PTGD_PTGD3
 #define VRTI 25
 #define VSCI 20
-#define VRTI 25
 
 int util = 10;	//ciclo util en porcentaje
-int contadorM1;
-int contadorM2;
-
+char contadorM1;
+char contadorM2;
 
 void conf_TPM(int ciclo_util);
 void conf_SCI(void);
 void conf_RTI(void);
+void pwm_1_0(int a);
+
 
 void main(void) {
   
   /* include your code here */
   SOPT = 0x40;
-  conf_TPM(util);
   
+  PTGDD_PTGDD0=0;
+  PTGDD_PTGDD1=0;
+  PTGDD_PTGDD2=0;
+  PTGDD_PTGDD3=0;
+  
+  conf_TPM(util);
+  conf_SCI();
+  conf_RTI();
   contadorM1=0;
   contadorM2=0;
-
+  
   EnableInterrupts;
   for(;;) {
+	  
   } /* loop forever */
   /* please make sure that you never leave main */
 }
@@ -129,16 +137,17 @@ void conf_SCI(void) {
 //	bits 2:0 = 000 perido de 8 ms
 /////////////////////////////////////////////////////////////////////////////////
 void conf_RTI(void) {
-	SRTISC =(SRTISC_RTIS0_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
+	SRTISC =(SRTISC_RTIS2_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
 }
 
 interrupt VRTI void rutina_RTI(void) {
 	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
+	pwm_1_0(10);
 	
 	//velocidad=0.5*0.333*contador/dt;
 	
-	SCI2D =0xFF;
-	while (SCI2S1_TC == 0) {
+	SCI1D =contadorM1;
+	while (SCI1S1_TC == 0) {
 	} //Espera mientras se envía el registro
 	
 	/*
@@ -153,8 +162,8 @@ interrupt VRTI void rutina_RTI(void) {
 	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
 	cambia_ciclo_util(util);*/
 	
-	contadorM1=0;
-	contadorM2=0;
+	//contadorM1=0;
+	//contadorM2=0;
 }
 
 
@@ -172,9 +181,9 @@ interrupt VTPM2CH0 void rutina_tpm20(void) {
 	TPM2C0SC_CH0F=0;
 	if (encM1A == encM1B) { 
 		contadorM1++;
-	}else{
-		contadorM1--;
-	}
+	}//else{
+	//	contadorM1--;
+	//}
 	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales
 }
 
