@@ -1,104 +1,38 @@
+close all;
+clc;
+s=serial('COM7','BaudRate',9600); %crea el objeto serial
+set(s,'timeout',0.008);
+muestras=625;
+contador=1;
+data=0;
+rta=zeros(1,muestras);
+entrada=zeros(1,muestras);
+dato_tx=132; %% dato para enviar el 100% pwm
 
-function Lab9P2
-    %Open the serial port
-    
-    SerialPort=serial('COM7');
-    fopen(SerialPort);
-    set(SerialPort,'BaudRate',9600);
-    
-    %Initial variables
-    
-    Tiempo=0.001;
-    Med=zeros(2,1000000);
-    SOpen=1;
-    Contador=1;
-    
-    % Create a figure and axes
-    f = figure('NumberTitle','off',...
-    'Name','Mediciones',...
-    'Visible','off');
+fopen(s);
 
-    ax = axes('Units','pixels');
-    
-     % Create push button          Cerrar Puerto
-    btn = uicontrol('Style', 'pushbutton', 'String', 'Cerrar Puerto',...
-        'Position', [600 30 130 20],...
-        'Callback', @CloseP);
-    
-    % Create push button          Refrescar la grafica
-    btn = uicontrol('Style', 'pushbutton', 'String', 'Refrescar',...
-        'Position', [600 50 130 20],...
-        'Callback', @Refresh);
-    
-    % Add a text uicontrol to label output commands
-    Puerto = uicontrol('Style','text',...
-        'Position',[600 10 130 20],...
-        'String','Puerto Abierto');
-   
-    % Make figure visble after adding all components
-    f.Visible = 'on';
-    % This code uses dot notation to set properties. 
-    % Dot notation runs in R2014b and later.
-    % For R2014a and earlier: set(f,'Visible','on');
- 
-    while SOpen
-        
-        if Contador==15000
-        
-            cla;
-            clear Med
-            clear Contador      
-            Med=zeros(2,1000000);
-            Contador=1;           
-        end
-        
-        Actual=fscanf(SerialPort,'%d');
-        flushinput(SerialPort);
-        [n,m]=size(Actual)
-        
-        if (n<1)||(m<1)
-            Actual(1,1)=0;
-            Actual(1,2)=0;
-        end
-        
-        Med(:,Contador)=Actual(:,1);
-
-        Data1 =Med(1,1:Contador);
-        Data2=Med(2,1:Contador);
-        tam = linspace(1,Contador,Contador);
-        plot(tam,Data1,'Color',[0 0 1]);  
-        grid on;
-        hold on;
-        plot(tam,Data2,'Color',[1 0 0]);
-        grid on;
-        hold off;
-        title('Mediciones de velocidad');
-        xlabel('Medicion');
-        ylabel('Revoluciones por minuto');
-        pause(0.01)
-        Contador=Contador+1;
-        
+while contador<=muestras
+    %espera medio segundo para mandar el escalon
+    if contador == 63
+        fwrite(s,dato_tx);
+    elseif contador>63
+        entrada(contador)=1;
+        data=fscanf(s);
+        disp(data)
+        %data=fscanf(s,'$d');
+        %rta(contador)=data;
     end
+    contador=contador+1;
+end
 
-    function Refresh(src,event)
-        
-        cla;
-        clear Med
-        clear Contador
-        
-        Med=zeros(2,1000000);
-        Contador=1;
-        
-    end
+fclose(s);
+delete(s);
+clear s;
 
-    function CloseP(src,event)
-        
-        SOpen=0;
-        fclose(SerialPort);
-        delete(SerialPort);
-        clear SerialPort
-        Out_txt.String='Se cerro el puerto serial';
-        Puerto.String='Puerto Cerrado';
-    end
 
+for i=1:length(rta)
+    k=str2num(rta(i));
+    k=num2str(k);
+    rta(i)=bin2dec(k);
+    
 end
