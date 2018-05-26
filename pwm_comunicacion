@@ -1,7 +1,6 @@
 #include <hidef.h> /* for EnableInterrupts macro */
 #include "derivative.h" /* include peripheral declarations */
 
-#define periodo 20 // periodo del PWM en ms
 #define VTPM2CH0 12
 #define VTPM2CH1 13
 #define encM1A PTGD_PTGD0
@@ -11,7 +10,8 @@
 #define VRTI 25
 #define VSCI 20
 
-int util = 10;	//ciclo util en porcentaje
+int FrecPWM = 23000; // periodo del PWM en ms
+int util = 50;	//ciclo util en porcentaje
 char contadorM1;
 char contadorM2;
 
@@ -31,6 +31,11 @@ void main(void) {
   PTGDD_PTGDD2=0;
   PTGDD_PTGDD3=0;
   
+  PTFDD_PTFDD4=0;
+  PTFDD_PTFDD5=0;
+  PTFPE_PTFPE4=0;
+  PTFPE_PTFPE5=0;
+
   conf_TPM(util);
   conf_SCI();
   conf_RTI();
@@ -38,7 +43,14 @@ void main(void) {
   contadorM2=0;
   
   EnableInterrupts;
+  
+  FrecPWM = 23000;
+  util = 50;
+  
+  pwm_1_0(util);
+  
   for(;;) {
+	  //pwm_1_0(util);
 	  
   } /* loop forever */
   /* please make sure that you never leave main */
@@ -50,16 +62,16 @@ void conf_TPM(int ciclo_util) {
 	// CLKSA = Fuente de reloj BUSCLK
 	// PS1 = Divisor de 4, reloj a 1kHz
 
-	TPM1SC = (TPM1SC_CPWMS_MASK | TPM1SC_CLKSA_MASK | TPM1SC_PS1_MASK);
+	TPM1SC = (TPM1SC_CLKSA_MASK | TPM1SC_PS1_MASK);
 	
 	// Medio periodo
-		TPM1MOD = periodo * 1000 / 2;
+		TPM1MOD = ((1/FrecPWM)*1000000);
 
 	// PWM centrado, High-true pulses (clear output on compare)
-	TPM1C0SC = (TPM1C0SC_ELS0B_MASK);
-	TPM1C1SC = (TPM1C1SC_ELS1B_MASK);
-	TPM1C2SC = (TPM1C2SC_ELS2B_MASK);
-	TPM1C3SC = (TPM1C3SC_ELS3B_MASK);
+	TPM1C0SC = (TPM1C0SC_MS0B_MASK | TPM1C0SC_ELS0B_MASK);
+	TPM1C1SC = (TPM1C1SC_MS1B_MASK | TPM1C1SC_ELS1B_MASK);
+	TPM1C2SC = (TPM1C2SC_MS2B_MASK | TPM1C2SC_ELS2B_MASK);
+	TPM1C3SC = (TPM1C3SC_MS3B_MASK | TPM1C3SC_ELS3B_MASK);
 	//ciclo util
 	TPM1C0V = 0;
 	TPM1C1V = 0;
@@ -69,25 +81,25 @@ void conf_TPM(int ciclo_util) {
 	//Conf lectura encoders:
 	TPM2SC = (TPM2SC_CLKSA_MASK | TPM2SC_PS1_MASK);
 	
-	TPM2C0SC = (TPM2C0SC_ELS0A_MASK | TPM2C0SC_ELS0B_MASK | TPM2C0SC_CH0IE_MASK);
-	TPM2C1SC = (TPM2C1SC_ELS1A_MASK | TPM2C1SC_ELS1B_MASK | TPM2C1SC_CH1IE_MASK);
+	TPM2C0SC = (TPM2C0SC_ELS0A_MASK | TPM2C0SC_CH0IE_MASK);
+	TPM2C1SC = (TPM2C1SC_ELS1A_MASK | TPM2C1SC_CH1IE_MASK);
 
 }
 
 void pwm_1_0(int a) {
-	TPM1C0V = a * 1000 / 2;
+	TPM1C0V =((a/FrecPWM)*10000);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 void pwm_1_1(int a) {
-	TPM1C1V = a * 1000 / 2;
+	TPM1C1V =((a/FrecPWM)*10000);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 void pwm_1_2(int a) {
-	TPM1C2V = a * 1000 / 2;
+	TPM1C2V =((a/FrecPWM)*10000);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 void pwm_1_3(int a) {
-	TPM1C3V = a * 1000 / 2;
+	TPM1C3V =((a/FrecPWM)*10000);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 
@@ -137,12 +149,11 @@ void conf_SCI(void) {
 //	bits 2:0 = 000 perido de 8 ms
 /////////////////////////////////////////////////////////////////////////////////
 void conf_RTI(void) {
-	SRTISC =(SRTISC_RTIS2_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
+	SRTISC =(SRTISC_RTIS0_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
 }
 
 interrupt VRTI void rutina_RTI(void) {
 	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
-	pwm_1_0(10);
 	
 	//velocidad=0.5*0.333*contador/dt;
 	
@@ -162,7 +173,7 @@ interrupt VRTI void rutina_RTI(void) {
 	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
 	cambia_ciclo_util(util);*/
 	
-	//contadorM1=0;
+	contadorM1=0;
 	//contadorM2=0;
 }
 
@@ -181,9 +192,9 @@ interrupt VTPM2CH0 void rutina_tpm20(void) {
 	TPM2C0SC_CH0F=0;
 	if (encM1A == encM1B) { 
 		contadorM1++;
-	}//else{
-	//	contadorM1--;
-	//}
+	}else{
+		contadorM1--;
+	}
 	//Encoder de cuadratura, el sentido de giro se lee por la diferencia en el signo de las señales
 }
 
