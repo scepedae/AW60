@@ -11,7 +11,7 @@
 #define VSCI 20
 
 int FrecPWM = 23000; // periodo del PWM en ms
-int util = 50;	//ciclo util en porcentaje
+int util;
 char contadorM1;
 char contadorM2;
 
@@ -55,7 +55,7 @@ void main(void) {
   FrecPWM = 23000;
   util = 100;
   
-  pwm_2_1(0);
+  pwm_1_1(util);
   
   for(;;) {
 	  
@@ -163,23 +163,19 @@ void conf_RTI(void) {
 }
 
 interrupt VRTI void rutina_RTI(void) {
-	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
-	
-	//velocidad=0.5*0.333*contador/dt;
-	
+	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);	
 	/*
 	error[1] = error[0];	//actualización del error
 	error[0] = referencia - velocidad;
-	delta = (error[0] - error[1]); //cáculo de la derivada del error
 	val = sum + (error[0] * TRTI); //Cálculo de la integral del error
 	if ((val < summax) && (val > -1 * summax)) { //limitación del acomulador para el integrador
 		sum += error[0] * TRTI; 
 	}
-	nominal = Kp * error[0] + sum * Ki + Kd * delta; //señal de control nominal, 
+	nominal = Kp * error[0] + sum * Ki; //señal de control nominal, 
 	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
 	cambia_ciclo_util(util);*/
 	
-	com(contadorM1);
+	com(contadorM2);
 	contadorM1=0;
 	contadorM2=0;
 	
