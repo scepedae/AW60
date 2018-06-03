@@ -55,7 +55,7 @@ void main(void) {
   FrecPWM = 23000;
   util = 100;
   
-  pwm_1_1(util);
+  pwm_2_1(0);
   
   for(;;) {
 	  
@@ -104,11 +104,11 @@ void pwm_1_1(int a) {
 	TPM1C1V =(short)((a*43)/100);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
-void pwm_1_2(int a) {
+void pwm_2_0(int a) {
 	TPM1C2V =(short)((a*43)/100);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
-void pwm_1_3(int a) {
+void pwm_2_1(int a) {
 	TPM1C3V =(short)((a*43)/100);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
