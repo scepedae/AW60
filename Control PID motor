@@ -15,13 +15,18 @@ int util = 50;	//ciclo util en porcentaje
 char contadorM1;
 char contadorM2;
 
+char valor;
 int recibido=0;
 
-void conf_TPM(int ciclo_util);
+void conf_TPM();
 void conf_SCI(void);
 void conf_RTI(void);
 void pwm_1_0(int a);
+void pwm_1_1(int a);
+void pwm_2_0(int a);
+void pwm_2_1(int a);
 void com(char x);
+void retardo(int cont);
 
 
 void main(void) {
@@ -39,7 +44,7 @@ void main(void) {
   PTFPE_PTFPE4=0;
   PTFPE_PTFPE5=0;
 
-  conf_TPM(util);
+  conf_TPM();
   conf_SCI();
   conf_RTI();
   contadorM1=0;
@@ -50,17 +55,18 @@ void main(void) {
   FrecPWM = 23000;
   util = 50;
   
-  pwm_1_0(util);
+  pwm_1_1(util);
   
   for(;;) {
-		com(0x01);
-		com(0x02);
-		com(0x03);
-		com(0x04);
+	  
+	  /*
+	  valor=ADC1RL;
+	  	  retardo(10);
+	  com(valor);*/
   }
 }
 
-void conf_TPM(int ciclo_util) {
+void conf_TPM(){
 	//
 	// CPWMS = PWM centrado
 	// CLKSA = Fuente de reloj BUSCLK
@@ -95,7 +101,7 @@ void pwm_1_0(int a) {
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 void pwm_1_1(int a) {
-	TPM1C1V =((a/FrecPWM)*10000);
+	TPM1C1V =(50000);
 	// debe estar en milisegundos, la división se debe a la programación de módulo TPM
 }
 void pwm_1_2(int a) {
@@ -153,7 +159,7 @@ void conf_SCI(void) {
 //	bits 2:0 = 000 perido de 8 ms
 /////////////////////////////////////////////////////////////////////////////////
 void conf_RTI(void) {
-	SRTISC =(SRTISC_RTIS0_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
+	SRTISC =(SRTISC_RTIS2_MASK | SRTISC_RTIE_MASK | SRTISC_RTIACK_MASK);
 }
 
 interrupt VRTI void rutina_RTI(void) {
@@ -173,12 +179,36 @@ interrupt VRTI void rutina_RTI(void) {
 	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
 	cambia_ciclo_util(util);*/
 	
+	com(contadorM1);
 	contadorM1=0;
-	//contadorM2=0;
+	contadorM2=0;
 	
 
 }
 
+void configuracion_ADC(){
+	////***************
+	// Conversion complete interrupt disabled
+	// Continuous Conversion Enable
+	////**********
+
+	
+	////***************
+	// High speed configuration
+	// internal clock ADCK = Input clock
+	// Short Sample Time Configuration
+	// 8-bit conversion mode (N=8)
+	// Input clock =Bus CLock
+	////**********
+	ADC1CFG = 0x00;
+	
+	////***************
+	// Input Channel Select = 
+	////**********
+	ADC1SC1 = (ADC1SC1_ADCO_MASK|ADC1SC1_ADCH1_MASK); 
+	
+	retardo(1000); // Espera que se estabilice el ADC
+}
 
 interrupt VTPM2CH1 void rutina_tpm21(void) {
 	TPM2C1SC_CH1F=0;
@@ -202,9 +232,7 @@ interrupt VTPM2CH0 void rutina_tpm20(void) {
 
 
 void com(char x){
-	char r=0;
-	recibido=0;
-	SCI1D =x;
+	SCI1D = x;
 	while (SCI1S1_TC == 0) {
 	}
 }
@@ -213,12 +241,8 @@ void com(char x){
 //Se asigna la lectura al valor de la referencia
 ////*******
 
-
-/*
-interrupt VSCI void sci_rx(void) {
-	
-	double f = SCI2S1;
-	referencia = SCI2D;
-
+void retardo(int cont){
+	int n;
+	for(n=0; n<cont; cont++);
 }
-*/
+
