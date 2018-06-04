@@ -17,8 +17,36 @@ char contadorM2;
 
 char valor;
 int recibido=0;
+/////////////////////////////////
+int Kp=10;
+int Ki=10;
+int periodo=23;
+int nominal=0;
+int summax=100;
+int util_c=0;
+int TRTI=0.032;
+char control;
 
-void conf_TPM();
+int velocidad_1;
+int referencia_1;
+int error1_1;
+int error0_1;
+int val_1;
+int sum_1;
+int u_1;
+
+int velocidad_2;
+int referencia_2;
+int error1_2;
+int error0_2;
+int val_2;
+int sum_2;
+int u_2;
+////////////////////////////////////////
+
+
+
+void conf_TPM(void);
 void conf_SCI(void);
 void conf_RTI(void);
 void pwm_1_0(int a);
@@ -30,40 +58,41 @@ void retardo(int cont);
 
 
 void main(void) {
-  
-  /* include your code here */
-  SOPT = 0x40;
-  
-  PTGDD_PTGDD0=0;
-  PTGDD_PTGDD1=0;
-  PTGDD_PTGDD2=0;
-  PTGDD_PTGDD3=0;
-  
-  PTFDD_PTFDD4=0;
-  PTFDD_PTFDD5=0;
-  PTFPE_PTFPE4=0;
-  PTFPE_PTFPE5=0;
 
-  conf_TPM();
-  conf_SCI();
-  conf_RTI();
-  contadorM1=0;
-  contadorM2=0;
-  
-  EnableInterrupts;
-  
-  FrecPWM = 23000;
-  util = 100;
-  
-  pwm_1_1(util);
-  
-  for(;;) {
-	  
-	  /*
+	/* include your code here */
+	SOPT = 0x40;
+
+	PTGDD_PTGDD0=0;
+	PTGDD_PTGDD1=0;
+	PTGDD_PTGDD2=0;
+	PTGDD_PTGDD3=0;
+
+	PTFDD_PTFDD4=0;
+	PTFDD_PTFDD5=0;
+	PTFPE_PTFPE4=0;
+	PTFPE_PTFPE5=0;
+
+	conf_TPM();
+	conf_SCI();
+	conf_RTI();
+	contadorM1=0;
+	contadorM2=0;
+
+	EnableInterrupts;
+
+	FrecPWM = 23000;
+	util = 50;
+
+	//pwm_1_0(util);
+
+
+	for(;;) {
+
+		/*
 	  valor=ADC1RL;
 	  	  retardo(10);
 	  com(valor);*/
-  }
+	}
 }
 
 void conf_TPM(){
@@ -73,9 +102,9 @@ void conf_TPM(){
 	// PS1 = Divisor de 4, reloj a 1kHz
 
 	TPM1SC = (TPM1SC_CLKSA_MASK | TPM1SC_PS1_MASK);
-	
+
 	// Medio periodo
-		TPM1MOD = 43;
+	TPM1MOD = 43;
 
 	// PWM centrado, High-true pulses (clear output on compare)
 	TPM1C0SC = (TPM1C0SC_MS0B_MASK | TPM1C0SC_ELS0B_MASK);
@@ -87,10 +116,10 @@ void conf_TPM(){
 	TPM1C1V = 0;
 	TPM1C2V = 0;
 	TPM1C3V = 0;
-	
+
 	//Conf lectura encoders:
 	TPM2SC = (TPM2SC_CLKSA_MASK | TPM2SC_PS1_MASK);
-	
+
 	TPM2C0SC = (TPM2C0SC_ELS0A_MASK | TPM2C0SC_CH0IE_MASK);
 	TPM2C1SC = (TPM2C1SC_ELS1A_MASK | TPM2C1SC_CH1IE_MASK);
 
@@ -164,21 +193,49 @@ void conf_RTI(void) {
 
 interrupt VRTI void rutina_RTI(void) {
 	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);	
-	/*
-	error[1] = error[0];	//actualización del error
-	error[0] = referencia - velocidad;
-	val = sum + (error[0] * TRTI); //Cálculo de la integral del error
-	if ((val < summax) && (val > -1 * summax)) { //limitación del acomulador para el integrador
-		sum += error[0] * TRTI; 
-	}
-	nominal = Kp * error[0] + sum * Ki; //señal de control nominal, 
-	util = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
-	cambia_ciclo_util(util);*/
 	
-	com(contadorM2);
+	velocidad_1=contadorM1; // [rev/seg]
+	referencia_1=10; 
+	error1_1 = error0_1;	//actualización del error
+	error0_1 = referencia_1 - velocidad_1;
+	val_1 = sum_1 + (error0_1 * TRTI); //Cálculo de la integral del error
+	if ((val_1 < summax) && (val_1 > -1 * summax)) { //limitación del acomulador para el integrador
+		sum_1 += error0_1 * TRTI; 
+	}
+	nominal = Kp * error0_1 + sum_1 * Ki; //señal de control nominal, 
+	util_c = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
+	u_1=u_1+util_c;
+	if(u_1>90){
+		u_1=90;	
+	}
+	pwm_1_1(u_1);
+	//cambia_ciclo_util(util);
+	
+	velocidad_2=contadorM2; // [rev/seg]
+		referencia_2=referencia_1*(1.1); 
+		error1_2 = error0_2;	//actualización del error
+		error0_2 = referencia_2 - velocidad_2;
+		val_2 = sum_2 + (error0_2 * TRTI); //Cálculo de la integral del error
+		if ((val_2 < summax) && (val_2 > -1 * summax)) { //limitación del acomulador para el integrador
+			sum_2 += error0_2 * TRTI; 
+		}
+		nominal = Kp * error0_2 + sum_2 * Ki; //señal de control nominal, 
+		util_c = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
+		u_2=u_2+util_c;
+		if(u_2>90){
+			u_2=90;	
+		}
+		pwm_2_0(u_2);
+	
+	
+	
+	
+	
+	com(contadorM1);
 	contadorM1=0;
 	contadorM2=0;
-	
+
+
 
 }
 
@@ -188,7 +245,7 @@ void configuracion_ADC(){
 	// Continuous Conversion Enable
 	////**********
 
-	
+
 	////***************
 	// High speed configuration
 	// internal clock ADCK = Input clock
@@ -197,12 +254,12 @@ void configuracion_ADC(){
 	// Input clock =Bus CLock
 	////**********
 	ADC1CFG = 0x00;
-	
+
 	////***************
 	// Input Channel Select = 
 	////**********
 	ADC1SC1 = (ADC1SC1_ADCO_MASK|ADC1SC1_ADCH1_MASK); 
-	
+
 	retardo(1000); // Espera que se estabilice el ADC
 }
 
@@ -241,4 +298,3 @@ void retardo(int cont){
 	int n;
 	for(n=0; n<cont; cont++);
 }
-
