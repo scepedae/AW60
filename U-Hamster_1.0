@@ -21,6 +21,12 @@
 #define SC_IR3_TD (ADC1SC1_ADCO_MASK | ADC1SC1_ADCH0_MASK | ADC1SC1_ADCH1_MASK)
 #define SC_IR4_F (ADC1SC1_ADCO_MASK | ADC1SC1_ADCH3_MASK)
 
+char frontal;
+char frontali;
+char frontald;
+char traseroi;
+char traserod;
+
 int FrecPWM = 23000; // periodo del PWM en ms
 int util;
 short contadorM1;
@@ -33,7 +39,6 @@ int Kd = 0;
 int periodo = 21;
 double nominal = 0;
 int summax = 100;
-char control;
 
 short velocidad_1;
 short referencia_1;
@@ -51,6 +56,9 @@ int error0_2;
 double val_2;
 double sum_2;
 short u_2;
+double val_pwm;
+short ref_base1;
+double ref_base;
 ////////////////////////////////////////
 
 void conf_TPM(void);
@@ -63,10 +71,17 @@ void pwm_2_1(int a);
 void sensores(void);
 void com(char x);
 void retardo(int cont);
+void control(void);
+
+void motor1(double nominal);
+void motor2(double nominal);
 
 void main(void) {
 
 	/* include your code here */
+
+
+	
 	SOPT = 0x40;
 
 	PTGDD_PTGDD0 = 0;
@@ -89,48 +104,103 @@ void main(void) {
 	;
 
 	FrecPWM = 23000;
-	util = 50;
-	
-	referencia_1 = 30;
-	referencia_2 = -30;
+	//util = 50;
 
+//	referencia_1 = 12;
+//	referencia_2 = (referencia_1*12)/10;
+//	ref_base1=referencia_1;
+	ref_base=60;
+val_pwm=40;
 	//pwm_1_0(100);
-
+motor1(val_pwm);
+		motor2(val_pwm);
 	for (;;) {
-		
-		sensores();
-		retardo(1);
-		
 	}
+}
+
+void motor1(double nominal ){
+	
+	if (nominal > 0) {
+			if (nominal > 90) {
+				pwm_1_0(90);
+			} else {
+				pwm_1_0((short) nominal);
+			}
+		} else {
+			if (nominal < -90) {
+				pwm_1_1(90);
+			} else {
+				pwm_1_1((short) -nominal);
+			}
+		}
+}
+void motor2(double nominal ){
+	
+	if (nominal > 0) {
+			if (nominal > 90) {
+				pwm_2_1(90);
+			} else {
+				pwm_2_1((short) nominal);
+			}
+		} else {
+			if (nominal < -90) {
+				pwm_2_0(90);
+			} else {
+				pwm_2_0((short) -nominal);
+			}
+		}
+}
+void control(void) {
+	//char torcido=0;
+	int k=10;
+		if(((frontali < 60) || (frontali > 75))){
+			if((frontali < 60) && ((k*(60-frontald)) < 60)){
+				val_pwm=ref_base + k*(60-frontald);
+				motor1(0);
+				retardo(10);
+			}else if((frontald > 75) && (k*(frontald-20) < 60)){
+				val_pwm=ref_base - k*(frontald-75);
+				motor1(0);
+				retardo(10);
+			}
+		}
+	
 }
 
 void sensores(void) {
 	com((char) 0);
 	com((char) 0);
+	ADC1SC1 = SC_IR4_F;
+	while (ADC1SC1_COCO == 0) {
+	}
+	frontal = ADC1RL;
+	com(frontal);
+
 	ADC1SC1 = SC_IR0_FD;
 	while (ADC1SC1_COCO == 0) {
 	}
-	com((char) ADC1RL);
-
-	ADC1SC1 = SC_IR1_TI;
-	while (ADC1SC1_COCO == 0) {
-	}
-	com((char) ADC1RL);
+	frontald = ADC1RL;
+	com(frontald);
 
 	ADC1SC1 = SC_IR2_FI;
 	while (ADC1SC1_COCO == 0) {
 	}
-	com((char) ADC1RL);
+	frontali = ADC1RL;
+	com(frontali);
 
 	ADC1SC1 = SC_IR3_TD;
 	while (ADC1SC1_COCO == 0) {
 	}
-	com((char) ADC1RL);
+	traserod = ADC1RL;
+	com(traserod);
 
-	ADC1SC1 = SC_IR4_F;
+	ADC1SC1 = SC_IR1_TI;
 	while (ADC1SC1_COCO == 0) {
 	}
-	com((char) ADC1RL);
+	traseroi = ADC1RL;
+	com(traseroi);
+	com((char)contadorM1%256);
+	com((char)contadorM2%256);
 
 }
 
@@ -232,8 +302,8 @@ void conf_RTI(void) {
 interrupt VRTI void rutina_RTI(void) {
 	SRTISC = (SRTISC | SRTISC_RTIACK_MASK);
 
-	velocidad_1 = contadorM1; // [rev/seg]
-	error1_1 = error0_1;	//actualización del error
+	//velocidad_1 = contadorM1; // [rev/seg]
+/*	error1_1 = error0_1;	//actualización del error
 	error0_1 = referencia_1 - velocidad_1;
 	val_1 = sum_1 + (error0_1 * TRTI); //Cálculo de la integral del error
 	if ((val_1 < summax) && (val_1 > -1 * summax)) { //limitación del acomulador para el integrador
@@ -242,25 +312,25 @@ interrupt VRTI void rutina_RTI(void) {
 	//delta1=(error0_1-error1_1)/TRTI;
 	nominal = Kp * error0_1 + sum_1 * Ki; //+ delta1 * Kd; //señal de control nominal, 
 	//util_c = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
-	
-	u_1=(short)nominal;
-	
-	if(nominal>0){
-		if(nominal>90){
-			pwm_1_1(90);
-		}else{
-			pwm_1_1((short)nominal);
-		}
-	}else{
-		if(nominal<-90){
-			pwm_1_0(90);
-		}else{
-			pwm_1_0((short)-nominal);
-		}
-	}
 
-	velocidad_2 = contadorM2; // [rev/seg]
-	error1_2 = error0_2;	//actualización del error
+	u_1 = (short) nominal;*/
+
+	/*if (nominal > 0) {
+		if (nominal > 90) {
+			pwm_1_0(90);
+		} else {
+			pwm_1_0((short) nominal);
+		}
+	} else {
+		if (nominal < -90) {
+			pwm_1_1(90);
+		} else {
+			pwm_1_1((short) -nominal);
+		}
+	}*/
+
+	//velocidad_2 = contadorM2; // [rev/seg]
+/*	error1_2 = error0_2;	//actualización del error
 	error0_2 = referencia_2 - velocidad_2;
 	val_2 = sum_2 + (error0_2 * TRTI); //Cálculo de la integral del error
 	if ((val_2 < summax) && (val_2 > -1 * summax)) { //limitación del acomulador para el integrador
@@ -268,21 +338,23 @@ interrupt VRTI void rutina_RTI(void) {
 	}
 	nominal = Kp * error0_2 + (sum_2 * Ki); //señal de control nominal, 
 	//util_c = (int) ((periodo * 0.01) * (nominal)); //actualización del ciclo util de acuerdo a la configuración de PWM
-	u_2 = (short) nominal;		//u_2+util_c;
-	if(nominal>0){
-			if(nominal>90){
-				pwm_2_0(90);
-			}else{
-				pwm_2_0((short)nominal);
-			}
-		}else{
-			if(nominal<-90){
-				pwm_2_1(90);
-			}else{
-				pwm_2_1((short)-nominal);
-			}
+	u_2 = (short) nominal;		//u_2+util_c;*/
+	/*if (nominal > 0) {
+		if (nominal > 90) {
+			pwm_2_1(90);
+		} else {
+			pwm_2_1((short) nominal);
 		}
-	
+	} else {
+		if (nominal < -90) {
+			pwm_2_0(90);
+		} else {
+			pwm_2_0((short) -nominal);
+		}
+	}*/
+
+	sensores();
+	control();
 	contadorM1 = 0;
 	contadorM2 = 0;
 }
