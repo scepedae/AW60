@@ -37,7 +37,7 @@ int Kp = 15;
 int Ki = 0;
 int Kd = 0;
 int periodo = 21;
-double nominal = 0;
+volatile double nominal = 0;
 int summax = 100;
 
 short velocidad_1;
@@ -56,9 +56,10 @@ int error0_2;
 double val_2;
 double sum_2;
 short u_2;
-double val_pwm;
+volatile double val_pwm;
 short ref_base1;
 double ref_base;
+int k;
 ////////////////////////////////////////
 
 void conf_TPM(void);
@@ -112,9 +113,32 @@ void main(void) {
 	ref_base=60;
 val_pwm=40;
 	//pwm_1_0(100);
-motor1(val_pwm);
-		motor2(val_pwm);
+pwm_1_0(val_pwm);
+pwm_2_1(1.2*val_pwm);
 	for (;;) {
+		sensores();
+		 k=1;
+				if(((frontali < 75) || (frontali > 95))){
+					if((frontali < 75) ){
+						//val_pwm=ref_base + k*(75-frontali);
+						val_pwm=val_pwm + 1;
+							if(val_pwm < 42){
+								pwm_1_0(val_pwm);
+							}else{
+								pwm_1_0(42);
+							}
+						retardo(1);
+					}else if((frontali > 95)){
+						//val_pwm=ref_base - k*(double)(frontali-95);
+						val_pwm=val_pwm - 1;
+							if(val_pwm > 30){
+								pwm_1_0(val_pwm);
+							}else{
+								pwm_1_0(30);
+							}
+						retardo(1);
+					}
+				}
 	}
 }
 
@@ -152,18 +176,7 @@ void motor2(double nominal ){
 }
 void control(void) {
 	//char torcido=0;
-	int k=10;
-		if(((frontali < 60) || (frontali > 75))){
-			if((frontali < 60) && ((k*(60-frontald)) < 60)){
-				val_pwm=ref_base + k*(60-frontald);
-				motor1(0);
-				retardo(10);
-			}else if((frontald > 75) && (k*(frontald-20) < 60)){
-				val_pwm=ref_base - k*(frontald-75);
-				motor1(0);
-				retardo(10);
-			}
-		}
+	
 	
 }
 
@@ -353,8 +366,8 @@ interrupt VRTI void rutina_RTI(void) {
 		}
 	}*/
 
-	sensores();
-	control();
+	//sensores();
+	//control();
 	contadorM1 = 0;
 	contadorM2 = 0;
 }
